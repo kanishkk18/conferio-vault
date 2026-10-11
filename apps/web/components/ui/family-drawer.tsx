@@ -383,7 +383,7 @@ type FamilyDrawerDescriptionProps = React.ComponentProps<typeof Drawer.Descripti
 
 function FamilyDrawerDescription({
   className,
-  ...props,
+  ...props
 }: FamilyDrawerDescriptionProps) {
   return (
     <Drawer.Description
