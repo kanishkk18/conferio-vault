@@ -1,0 +1,53 @@
+{
+  "name": "@securevault/web",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --turbopack -p 3001",
+    "build": "pnpm --filter @securevault/database db:generate && next build",
+    "start": "next start",
+    "lint": "next lint",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.1084.0",
+    "@aws-sdk/s3-request-presigner": "^3.1084.0",
+    "@hookform/resolvers": "^3.10.0",
+    "@prisma/client": "^6.19.3",
+    "@radix-ui/react-slot": "^1.4.0",
+    "@securevault/database": "workspace:*",
+    "@securevault/encryption": "workspace:*",
+    "@securevault/shared-types": "workspace:*",
+    "@tanstack/react-query": "^5.101.2",
+    "@upstash/ratelimit": "^2.0.8",
+    "@upstash/redis": "^1.38.0",
+    "better-auth": "1.6.23",
+    "class-variance-authority": "^0.7.1",
+    "cn": "^0.4.0",
+    "lucide-react": "^0.468.0",
+    "motion": "^14.1.0",
+    "next": "^15.5.20",
+    "ogl": "^1.0.11",
+    "radix-ui": "^1.7.0",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "react-hook-form": "^7.81.0",
+    "react-use-measure": "^2.1.7",
+    "resend": "^4.8.0",
+    "shadcn": "^4.21.4",
+    "sonner": "^1.7.4",
+    "tw-animate-css": "^1.4.0",
+    "vaul": "^1.1.2",
+    "zod": "^3.25.76",
+    "zustand": "^5.0.14"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.0.0",
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^4.0.0",
+    "typescript": "^5.7.0"
+  }
+}

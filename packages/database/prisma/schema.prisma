@@ -1,0 +1,248 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================
+// Better Auth tables (structure required by the Better Auth
+// Prisma adapter — do not rename fields/relations below).
+// ============================================================
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified Boolean   @default(false)
+  image         String?
+  role          String    @default("user") // "user" | "admin"
+  banned        Boolean   @default(false)
+  banReason     String?
+  banExpires    DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Vault key-derivation data (salt only — never the key itself)
+  masterKeySalt String? // base64, generated at signup, used to re-derive the master key
+
+  // ECDH (P-256) keypair for user-to-user sharing without a link/password.
+  // publicKey is safe to expose to other users. privateKey is wrapped with
+  // this user's own master key — the server only ever stores ciphertext.
+  publicKey        String?
+  wrappedPrivateKey String?
+  privateKeyIv     String?
+
+  // Relations
+  passwords  Password[]
+  mediaItems MediaItem[]
+  shareLinks ShareLink[]
+  sessions   Session[]
+  accounts   Account[]
+  auditLogs  AuditLog[]
+
+  // Admin tracking
+  lastLoginAt DateTime?
+  loginCount  Int       @default(0)
+  ipAddress   String?
+
+  @@index([email])
+  @@map("user")
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  ipAddress String?
+  userAgent String?
+  impersonatedBy String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id @default(cuid())
+  userId                String
+  accountId             String
+  providerId            String
+  accessToken           String?
+  refreshToken          String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  idToken               String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([providerId, accountId])
+  @@index([userId])
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id @default(cuid())
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([identifier, value])
+  @@map("verification")
+}
+
+// ============================================================
+// Vault tables
+// ============================================================
+
+model Password {
+  id            String   @id @default(cuid())
+  userId        String
+  title         String
+  username      String
+  // Server only ever stores ciphertext. `encryptedData` is the base64
+  // AES-256-GCM ciphertext of { password, notes, url } encrypted client-side
+  // with a per-item data key, which is itself wrapped by the user's master key.
+  encryptedData String
+  encryptedDataKey String // base64 — data key wrapped with the user's master key
+  keyIv         String   // IV used to wrap the data key (base64)
+  iv            String   // IV used to encrypt encryptedData (base64)
+  isHidden      Boolean  @default(false)
+  category      String   @default("other")
+  tags          String[] @default([])
+  url           String?
+  icon          String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  deletedAt     DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([category])
+  @@index([userId, deletedAt])
+  @@map("password")
+}
+
+model MediaItem {
+  id           String   @id @default(cuid())
+  userId       String
+  fileName     String
+  originalName String
+  mimeType     String
+  fileSize     Int
+  fileType     String // "image" | "video" | "document" | "spreadsheet" | "pdf" | "other"
+
+  // Encryption metadata for the "normal" case: the file key is wrapped with
+  // the user's master key, so it decrypts automatically once the vault is
+  // unlocked. Null when requiresPassword is true (see below).
+  encryptedFileKey String?
+  keyIv            String?
+
+  // Per-file password protection: when true, the file key is wrapped ONLY
+  // with a key derived (PBKDF2) from this file's own password + viewKeySalt
+  // — deliberately NOT also wrapped with the master key. That means the
+  // account owner cannot decrypt this specific file just by having the
+  // vault unlocked; they must know this file's password too. This is a
+  // real second boundary, not a UI-only lock.
+  requiresPassword  Boolean @default(false)
+  viewKeySalt       String?
+  viewWrappedKey    String?
+  viewKeyIv         String?
+
+  // Admin key escrow: the SAME file key, wrapped a second time with a
+  // master key that lives only in the admin server's environment (never
+  // in this database, never on R2/CDN). This intentionally breaks true
+  // zero-knowledge for media (the platform itself can decrypt), in
+  // exchange for admin moderation/support access — see ADMIN_MASTER_KEY.
+  // The password vault has no equivalent field and stays zero-knowledge.
+  adminWrappedKey String?
+  adminKeyIv      String?
+
+  iv               String // base IV used for the file's chunked encryption (base64)
+  chunkSize        Int    @default(65536)
+  chunkCount       Int
+  thumbnailIv      String?
+
+  // Storage (R2) — encrypted blobs, meaningless without keys
+  storageKey   String  // R2 object key (random UUID)
+  thumbnailKey String?
+
+  // Metadata
+  isHidden  Boolean   @default(false)
+  caption   String?
+  tags      String[]  @default([])
+  uploadedAt DateTime @default(now())
+  takenAt   DateTime?
+  year      Int
+  month     Int
+  location  String?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([year, month])
+  @@index([fileType])
+  @@index([uploadedAt])
+  @@index([userId, deletedAt])
+  @@map("media_item")
+}
+
+model ShareLink {
+  id              String    @id @default(cuid())
+  userId          String
+  type            String // "password" | "media"
+  itemId          String
+  token           String    @unique
+  // If password-protected, this is a wrapped copy of the item's data/file key,
+  // re-encrypted with a key derived from the share password. Null = link-only.
+  wrappedKeyForShare String?
+  shareKeyIv      String?
+  shareKeySalt    String?
+  expiresAt       DateTime?
+  maxUses         Int?
+  usedCount       Int       @default(0)
+  recipientEmail  String?
+  recipientUserId String?
+  isActive        Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([userId])
+  @@map("share_link")
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  action     String // "login", "password_view", "media_download", "share_create", ...
+  resource   String?
+  resourceId String?
+  ipAddress  String?
+  userAgent  String?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([createdAt])
+  @@index([action])
+  @@map("audit_log")
+}

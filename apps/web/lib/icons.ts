@@ -1,0 +1,2 @@
+import { Search, SlidersHorizontal, Film, LayoutGrid, Rows3, Columns3, Trash2 } from "lucide-react";
+export { Search, SlidersHorizontal, Film, LayoutGrid as GridIcon, Rows3 as ListIcon, Columns3 as MasonryIcon, Trash2 }; 
